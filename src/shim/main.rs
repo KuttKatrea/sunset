@@ -1,5 +1,6 @@
 use std::env;
 use std::path::Path;
+use std::process;
 use std::process::Command;
 use toml::value::Table;
 
@@ -110,11 +111,12 @@ fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
 fn main() {
     // Catch Signals. If signals, set global semaphore.
 
-    let exe_path = env::args().nth(0).expect("No arg 0? Crazy");
-    let exe_path = Path::new(&exe_path);
+    let exe_path = env::current_exe().expect("No arg 0? Crazy");
+    //let exe_path = Path::new(&exe_path);
     let shim_path = exe_path.with_extension("shim");
 
-    // println!("Reading shim file at: {}", shim_path.display());
+    //println!("Reading exe file at: {:?}", &exe_path);
+    //println!("Reading shim file at: {:?}", &shim_path);
 
     let config = read_config(shim_path.as_path()).expect("Error reading file");
 
@@ -164,8 +166,8 @@ fn main() {
             let res = child.wait();
             res.unwrap().code().unwrap()
         }
-        Err(e) => -1,
+        Err(_e) => -1,
     };
 
-    std::process::exit(exit_code);
+    process::exit(exit_code);
 }

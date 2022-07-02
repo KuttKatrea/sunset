@@ -1,10 +1,13 @@
 use clap::{Parser, Subcommand};
-use serde::de::Unexpected::Str;
-use std::ops::Deref;
-use std::path;
+use path_absolutize;
+use path_absolutize::Absolutize;
 use std::path::PathBuf;
+use std::process;
 use std::{env, fs};
+
 use toml;
+
+use std::os;
 
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
@@ -37,23 +40,29 @@ fn main() {
         Commands::Shimmer {
             path: target_path,
             name,
-        } => match target_path {
-            None => {}
-            Some(target_path) => {
-                shimmer(target_path, name);
-            }
-        },
-        Commands::Path { name } => match name {
-            None => {}
-            Some(name) => {
-                path(name);
-            }
-        },
-    }
+        } => shimmer(target_path, name),
+        Commands::Path { name } => path(name),
+    };
 }
 
-fn shimmer(target_path: &String, name: &Option<String>) {
-    let target = PathBuf::from(target_path).canonicalize().expect("");
+fn shimmer(target_path: &Option<String>, name: &Option<String>) {
+    let target_path = match target_path {
+        None => {
+            println!("target path not specified");
+            process::exit(-1);
+        }
+        Some(value) => value,
+    };
+
+    let target_pathbuf = PathBuf::from(target_path);
+
+    let target = match target_pathbuf.absolutize() {
+        Ok(absolute_path) => absolute_path,
+        Err(err) => {
+            println!("Cannot absolutize path {}: {}", target_path, err);
+            process::exit(-1);
+        }
+    };
 
     let shim_name = match name {
         None => String::from(
@@ -67,32 +76,65 @@ fn shimmer(target_path: &String, name: &Option<String>) {
         Some(name) => String::from(name),
     };
 
-    println!("{}", shim_name);
-
     let (_current_exe, shimfile_path, _exefile_path) = get_shimfile(&shim_name);
 
+    println!("Shimming {:?} => {:?}", _exefile_path, &shimfile_path);
+
     let mut shimfile_content = toml::value::Table::new();
+
     let path_value = toml::Value::from(target.to_str().expect(""));
 
     shimfile_content.insert(String::from("path"), path_value);
 
-    let toml_content = toml::to_string(&shimfile_content).expect("");
+    let toml_content = match toml::to_string(&shimfile_content) {
+        Ok(text_content) => text_content,
+        Err(err) => {
+            println!("Cannot create TOML string: {:?}", err);
+            process::exit(-1);
+        }
+    };
 
-    let res = std::fs::write(shimfile_path, &toml_content);
-
-    if (_exefile_path.exists()) {
-        let res = fs::remove_file(&_exefile_path);
+    match fs::write(&shimfile_path, &toml_content) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Cannot write file {:?}: {}", shimfile_path, err);
+            process::exit(-1);
+        }
     }
 
-    let res = std::os::windows::fs::symlink_file(_current_exe, _exefile_path);
+    if _exefile_path.exists() {
+        match fs::remove_file(&_exefile_path) {
+            Ok(_) => {}
+            Err(err) => {
+                println!("Cannot remove {:?}: {}", &_exefile_path, err);
+                process::exit(-1);
+            }
+        }
+    }
 
-    // Get own dir
-    // If exe name not specified, get targeted exe name
-    // Create .shim file with path = targeted_exe
-    // LN shim exe to exename.exe
+    match os::windows::fs::symlink_file(&_current_exe, &_exefile_path) {
+        Ok(_) => {}
+        Err(err) => {
+            println!(
+                "Cannot symlink {:?} to {:?}: {:?}",
+                &_current_exe, &_exefile_path, err
+            );
+            process::exit(-1);
+        }
+    }
+
+    println!("Done");
 }
 
-fn path(name: &String) {
+fn path(name: &Option<String>) {
+    let name = match name {
+        None => {
+            println!("shim name not specified");
+            process::exit(-1);
+        }
+        Some(value) => value,
+    };
+
     // Print path of shimfile if exists
     let (_current_exe, shimfile_path, _exefile_path) = get_shimfile(name);
     println!("{}", shimfile_path.to_str().expect(""));

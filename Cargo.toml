@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 toml = "0.5.9"
 serde = "1.0.137"
+path-absolutize = "3.0.13"
 clap = { version = "3.0", features = ["derive"] }
 
 [[bin]]
