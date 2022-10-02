@@ -3,18 +3,26 @@ name = "sunset"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "sunset"
+path = "src/sunset/lib.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 toml = "0.5.9"
 serde = "1.0.137"
 path-absolutize = "3.0.13"
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "4.0", features = ["derive"] }
 
 [[bin]]
 name = "shim"
-path = "src/shim/main.rs"
+path = "src/bin/shim/main.rs"
+
+[[bin]]
+name = "shimw"
+path = "src/bin/shimw/main.rs"
 
 [[bin]]
 name = "sunset"
-path = "src/sunset/main.rs"
+path = "src/bin/sunset/main.rs"

@@ -108,7 +108,7 @@ fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
     Ok(ret_value)
 }
 
-fn main() {
+pub fn main() {
     // Catch Signals. If signals, set global semaphore.
 
     let exe_path = env::current_exe().expect("No arg 0? Crazy");
