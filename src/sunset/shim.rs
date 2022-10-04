@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process;
 use std::process::Command;
 use toml::value::Table;
+use toml::Value::Boolean;
 
 #[derive(Debug)]
 enum ShimConfigEnvAction {
@@ -13,7 +14,7 @@ enum ShimConfigEnvAction {
 }
 
 #[derive(Debug)]
-struct ShimConfigEnvActionItem {
+pub struct ShimConfigEnvActionItem {
     var: String,
     action: ShimConfigEnvAction,
     value: String,
@@ -21,10 +22,11 @@ struct ShimConfigEnvActionItem {
 }
 
 #[derive(Debug)]
-struct ShimConfig {
-    path: String,
-    args: Vec<String>,
-    env: Vec<ShimConfigEnvActionItem>,
+pub struct ShimConfig {
+    pub path: String,
+    pub args: Vec<String>,
+    pub env: Vec<ShimConfigEnvActionItem>,
+    pub win: bool,
 }
 
 fn map_single_env_action_item(table: &Table) -> ShimConfigEnvActionItem {
@@ -63,7 +65,7 @@ fn map_single_env_action_item(table: &Table) -> ShimConfigEnvActionItem {
     }
 }
 
-fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
+pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
     let content = std::fs::read_to_string(path)?;
     let value: Table = toml::from_str(&content).expect("Couldn't get a value");
 
@@ -103,7 +105,18 @@ fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
             .collect(),
     };
 
-    let ret_value = ShimConfig { path, args, env };
+    let win = value
+        .get("win")
+        .unwrap_or(&Boolean(false))
+        .as_bool()
+        .unwrap();
+
+    let ret_value = ShimConfig {
+        path,
+        args,
+        env,
+        win,
+    };
 
     Ok(ret_value)
 }
@@ -112,11 +125,11 @@ pub fn main() {
     // Catch Signals. If signals, set global semaphore.
 
     let exe_path = env::current_exe().expect("No arg 0? Crazy");
-    //let exe_path = Path::new(&exe_path);
     let shim_path = exe_path.with_extension("shim");
 
-    //println!("Reading exe file at: {:?}", &exe_path);
-    //println!("Reading shim file at: {:?}", &shim_path);
+    // println!("Reading exe file at: {:?}", &exe_path);
+    // println!("Reading shim file at: {:?}", &shim_path);
+    // dbg!(env::vars());
 
     let config = read_config(shim_path.as_path()).expect("Error reading file");
 
