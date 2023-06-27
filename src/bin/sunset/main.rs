@@ -1,11 +1,19 @@
 use clap::{ArgAction, Parser, Subcommand};
+use std::env;
+use std::fs;
+use std::path;
 use std::process;
+
+use winreg::enums::HKEY_CURRENT_USER;
+use winreg::enums::KEY_ALL_ACCESS;
+use winreg::RegKey;
 
 use sunset::shim;
 use sunset::shimmer;
 
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
+#[clap(trailing_var_arg = true)]
 struct Cli {
     #[clap(subcommand)]
     command: Commands,
@@ -13,21 +21,39 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Init {
+        #[clap(long, env = "SUNSET_SHIMS_PATH")]
+        shims_path: Option<String>,
+    },
+
     /// Adds files to myapp
     Shim {
+        #[clap(long)]
+        shim_name: Option<String>,
+
         #[clap(long, action=ArgAction::SetTrue)]
         win: Option<bool>,
 
         #[clap(value_parser)]
-        path: Option<String>,
+        path: String,
 
-        #[clap(value_parser)]
-        name: Option<String>,
+        #[clap(value_parser, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
 
     Path {
         #[clap(value_parser)]
         name: Option<String>,
+    },
+
+    Edit {
+        #[clap(value_parser)]
+        name: String,
+    },
+
+    Show {
+        #[clap(value_parser, name = "SHIM NAME")]
+        name: String,
     },
 
     Rm {
@@ -49,17 +75,94 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::Init { shims_path } => shim_init(shims_path),
         Commands::Shim {
+            shim_name,
             win,
             path: target_path,
-            name,
-        } => shimmer::shim(target_path, name, win),
+            args,
+        } => shimmer::shim(target_path, args, shim_name, win),
         Commands::Path { name } => shimmer::shim_path(name),
+        Commands::Edit { name } => shimmer::shim_edit(name),
+        Commands::Show { name } => shimmer::shim_show(name),
         Commands::Rm { name } => shimmer::shim_remove(name),
         Commands::Upgrade { name } => shim_upgrade(name),
         Commands::List {} => shim_list(),
         Commands::UpgradeAll {} => shim_upgrade_all(),
     };
+}
+
+fn shim_init(shims_path: &Option<String>) {
+    let localappdata_path = match env::var("LOCALAPPDATA") {
+        Ok(var_value) => path::Path::new(&var_value).join("sunset\\shims"),
+        Err(e) => {
+            println!("Failed to get value of {}: {}", "LOCALAPPDATA", e);
+            process::exit(-1);
+        }
+    };
+
+    let selected_shims_path = match shims_path {
+        Some(value) => path::Path::new(value),
+        None => localappdata_path.as_path(),
+    };
+
+    let selected_shims_path_str = selected_shims_path.to_str().unwrap();
+
+    println!("Selected shims path: {:?}", selected_shims_path);
+
+    println!(
+        "Initializing sunset, shims in path {:?}",
+        selected_shims_path
+    );
+
+    // ENSURE SHIMS_PATH exists
+
+    match fs::create_dir_all(selected_shims_path) {
+        Ok(_value) => true,
+        Err(e) => {
+            println!("Error creating directories: {}", e);
+            process::exit(-1);
+        }
+    };
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let env_key = hkcu
+        .open_subkey_with_flags("Environment", KEY_ALL_ACCESS)
+        .unwrap();
+
+    println!(
+        "Setting SUNSET_SHIMS_PATH environment variable to {}",
+        selected_shims_path_str
+    );
+
+    match env_key.set_value("SUNSET_SHIMS_PATH", &selected_shims_path_str) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Error setting env var: {}", err);
+            process::exit(-1);
+        }
+    };
+
+    // Get the current value of the PATH variable
+    let current_path: String = env_key.get_value("PATH").unwrap();
+
+    let paths: Vec<&str> = current_path.split(";").collect();
+
+    let is_present = paths.iter().any(|&part| part == selected_shims_path_str);
+
+    if !is_present {
+        // Append your directory to the current PATH
+        let new_path = format!("{};{}", current_path, selected_shims_path_str);
+
+        println!("Setting PATH environment variable to: {}", new_path);
+
+        // Update the PATH value in the registry
+        env_key.set_value("PATH", &new_path).unwrap();
+    } else {
+        println!("{} already on PATH", selected_shims_path_str);
+    }
+
+    println!("Restart processes");
 }
 
 fn shim_upgrade(shim_name: &Option<String>) {

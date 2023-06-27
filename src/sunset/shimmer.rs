@@ -1,31 +1,49 @@
 use path_absolutize;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
-use std::process;
 use std::{env, fs};
+use std::{path, process};
+
+use pathsearch::find_executable_in_path;
 
 use toml;
 
-pub fn shim(target_path: &Option<String>, name: &Option<String>, win: &Option<bool>) {
-    let target_path = match target_path {
-        None => {
-            println!("target path not specified");
-            process::exit(-1);
-        }
-        Some(value) => value,
-    };
-
+pub fn shim(
+    target_path: &String,
+    args: &Vec<String>,
+    shim_name: &Option<String>,
+    win: &Option<bool>,
+) {
     let target_pathbuf = PathBuf::from(target_path);
 
-    let target = match target_pathbuf.absolutize() {
-        Ok(absolute_path) => absolute_path,
-        Err(err) => {
-            println!("Cannot absolutize path {}: {}", target_path, err);
+    let target = match target_pathbuf.parent() {
+        Some(v) => {
+            if v == path::Path::new("") {
+                match find_executable_in_path(target_path) {
+                    Some(path) => path,
+                    None => {
+                        println!("Cannot find executable in PATH {}", target_path);
+                        process::exit(-1);
+                    }
+                }
+            } else {
+                println!("Parent {}", v.to_str().unwrap());
+                target_pathbuf
+                    .to_path_buf()
+                    .absolutize()
+                    .unwrap()
+                    .to_path_buf()
+            }
+        }
+        None => {
+            println!("Invalid path {}", target_path);
             process::exit(-1);
         }
     };
 
-    let shim_name = match name {
+    println!("Target {}", target.to_str().unwrap());
+
+    let shim_fullname = match shim_name {
         None => String::from(
             target
                 .with_extension("")
@@ -40,19 +58,22 @@ pub fn shim(target_path: &Option<String>, name: &Option<String>, win: &Option<bo
     let sunset_dir = get_sunset_dir();
     let shims_dir = get_shims_dir();
     let shim_exe = get_shim_exe(&sunset_dir, win.as_ref().unwrap());
-    let shimfile_path = get_shimfile(&shims_dir, &shim_name);
-    let shimmed_exe_path = get_shimmed_exe(&shims_dir, &shim_name);
+    let shimfile_path = get_shimfile(&shims_dir, &shim_fullname);
+    let shimmed_exe_path = get_shimmed_exe(&shims_dir, &shim_fullname);
 
     println!(
-        "Shimming {:?} => {:?} using {:?}",
-        shimmed_exe_path, shimfile_path, shim_exe
+        "Shimming {:?}/ {:?} => {:?} using {:?}",
+        shimmed_exe_path, shimfile_path, target, shim_exe
     );
 
     let mut shimfile_content = toml::value::Table::new();
 
     let path_value = toml::Value::from(target.to_str().unwrap());
 
+    let argsvec = toml::Value::from(args.to_vec());
+
     shimfile_content.insert(String::from("path"), path_value);
+    shimfile_content.insert(String::from("args"), toml::Value::from(argsvec));
 
     let toml_content = match toml::to_string(&shimfile_content) {
         Ok(text_content) => text_content,
@@ -78,8 +99,8 @@ pub fn shim(target_path: &Option<String>, name: &Option<String>, win: &Option<bo
 pub fn shim_path(name: &Option<String>) {
     let name = match name {
         None => {
-            println!("shim name not specified");
-            process::exit(-1);
+            println!("{}", get_shims_dir().to_str().unwrap());
+            process::exit(0);
         }
         Some(value) => value,
     };
@@ -87,6 +108,28 @@ pub fn shim_path(name: &Option<String>) {
     // Print path of shimfile if exists
     let shimfile_path = get_shimfile(&get_shims_dir(), name);
     println!("{}", shimfile_path.to_str().unwrap());
+}
+
+pub fn shim_edit(name: &String) {
+    // Print path of shimfile if exists
+    let shimfile_path = get_shimfile(&get_shims_dir(), name);
+
+    open::that(&shimfile_path).expect("Error opening shimfile");
+}
+
+pub fn shim_show(name: &String) {
+    // Print path of shimfile if exists
+    let shimfile_path = get_shimfile(&get_shims_dir(), name);
+
+    let content = match std::fs::read_to_string(&shimfile_path) {
+        Ok(content) => content,
+        Err(err) => {
+            println!("Error reading shimfile: {:?}: {:?}", &shimfile_path, err);
+            process::exit(-1);
+        }
+    };
+
+    println!("{}", content);
 }
 
 pub fn get_sunset_dir() -> PathBuf {

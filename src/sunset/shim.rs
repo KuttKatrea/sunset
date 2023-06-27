@@ -173,6 +173,10 @@ pub fn main() {
 
     let mut child = cmd.spawn().expect("SS: Failed to execute command");
 
+    if config.win {
+        process::exit(0);
+    }
+
     let exit_code = match child.try_wait() {
         Ok(Some(status)) => status.code().unwrap(),
         Ok(None) => {
