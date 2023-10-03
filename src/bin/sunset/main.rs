@@ -34,6 +34,9 @@ enum Commands {
         #[clap(long, action=ArgAction::SetTrue)]
         win: Option<bool>,
 
+        #[clap(long, action=ArgAction::SetTrue)]
+        hidden: Option<bool>,
+
         #[clap(value_parser)]
         path: String,
 
@@ -79,9 +82,10 @@ fn main() {
         Commands::Shim {
             shim_name,
             win,
+            hidden,
             path: target_path,
             args,
-        } => shimmer::shim(target_path, args, shim_name, win),
+        } => shimmer::shim(target_path, args, shim_name, win, hidden),
         Commands::Path { name } => shimmer::shim_path(name),
         Commands::Edit { name } => shimmer::shim_edit(name),
         Commands::Show { name } => shimmer::shim_show(name),

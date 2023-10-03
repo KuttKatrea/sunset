@@ -1,7 +1,8 @@
 use std::env;
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use toml::value::Table;
 use toml::Value::Boolean;
 
@@ -27,6 +28,7 @@ pub struct ShimConfig {
     pub args: Vec<String>,
     pub env: Vec<ShimConfigEnvActionItem>,
     pub win: bool,
+    pub hidden: bool,
 }
 
 fn map_single_env_action_item(table: &Table) -> ShimConfigEnvActionItem {
@@ -111,11 +113,18 @@ pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
         .as_bool()
         .unwrap();
 
+    let hidden = value
+        .get("hidden")
+        .unwrap_or(&Boolean(false))
+        .as_bool()
+        .unwrap();
+
     let ret_value = ShimConfig {
         path,
         args,
         env,
         win,
+        hidden,
     };
 
     Ok(ret_value)
@@ -171,9 +180,18 @@ pub fn main() {
         }
     }
 
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    if config.hidden {
+        cmd.creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+    }
+
     let mut child = cmd.spawn().expect("SS: Failed to execute command");
 
-    if config.win {
+    if config.win || config.hidden {
         process::exit(0);
     }
 

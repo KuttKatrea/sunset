@@ -13,6 +13,7 @@ pub fn shim(
     args: &Vec<String>,
     shim_name: &Option<String>,
     win: &Option<bool>,
+    hidden: &Option<bool>,
 ) {
     let target_pathbuf = PathBuf::from(target_path);
 
@@ -74,6 +75,14 @@ pub fn shim(
 
     shimfile_content.insert(String::from("path"), path_value);
     shimfile_content.insert(String::from("args"), toml::Value::from(argsvec));
+
+    if win.unwrap() {
+        shimfile_content.insert(String::from("win"), toml::Value::from(win.unwrap()));
+    }
+
+    if hidden.unwrap() {
+        shimfile_content.insert(String::from("hidden"), toml::Value::from(hidden.unwrap()));
+    }
 
     let toml_content = match toml::to_string(&shimfile_content) {
         Ok(text_content) => text_content,
