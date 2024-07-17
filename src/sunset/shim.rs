@@ -5,6 +5,8 @@ use std::process;
 use std::process::{Command, Stdio};
 use toml::value::Table;
 use toml::Value::Boolean;
+use regex::{Captures, Regex};
+use once_cell::sync::Lazy;
 
 #[derive(Debug)]
 enum ShimConfigEnvAction {
@@ -29,6 +31,8 @@ pub struct ShimConfig {
     pub env: Vec<ShimConfigEnvActionItem>,
     pub win: bool,
     pub hidden: bool,
+    pub env_expand_path: bool,
+    pub env_expand_args: bool,
 }
 
 fn map_single_env_action_item(table: &Table) -> ShimConfigEnvActionItem {
@@ -119,33 +123,74 @@ pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
         .as_bool()
         .unwrap();
 
+    let env_expand_path = value
+        .get("env_expand_path")
+        .unwrap_or(&Boolean(false))
+        .as_bool()
+        .unwrap();
+
+    let env_expand_args = value
+        .get("env_expand_args")
+        .unwrap_or(&Boolean(false))
+        .as_bool()
+        .unwrap();
+
     let ret_value = ShimConfig {
         path,
         args,
         env,
         win,
         hidden,
+        env_expand_path,
+        env_expand_args,
     };
 
     Ok(ret_value)
+}
+
+static ENV_VAR: Lazy<Regex> = Lazy::new(|| {
+    Regex::new("%([[:word:]]*)%").expect("Invalid Regex")
+});
+
+pub fn env_expand(input: &String) -> String {
+    // Shamelessly ripped of from:
+    // https://users.rust-lang.org/t/expand-win-env-var-in-string/50320/3
+    ENV_VAR.replace_all(input.as_str(), |c:&Captures| match &c[1] {
+        "" => String::from("%"),
+        varname => env::var(varname).unwrap_or("".to_string())
+    }).into()
 }
 
 pub fn main() {
     // Catch Signals. If signals, set global semaphore.
 
     let exe_path = env::current_exe().expect("No arg 0? Crazy");
-    let shim_path = exe_path.with_extension("shim");
+    let shim_path_buf = exe_path.with_extension("shim");
 
     // println!("Reading exe file at: {:?}", &exe_path);
     // println!("Reading shim file at: {:?}", &shim_path);
     // dbg!(env::vars());
 
-    let config = read_config(shim_path.as_path()).expect("Error reading file");
+    let shim_path = shim_path_buf.as_path();
+
+    let config = read_config(shim_path).expect(format!("Error reading file: {}", shim_path.display()).as_str());
 
     // dbg!(&config);
 
-    let mut cmd = Command::new(config.path);
-    cmd.args(config.args);
+    let path: String = if config.env_expand_path {
+        env_expand(&config.path)
+    } else {
+        config.path
+    };
+
+    let args = if config.env_expand_args {
+        config.args.iter().map(env_expand).collect()
+    } else {
+        config.args
+    };
+
+    let mut cmd = Command::new(path.to_string());
+    cmd.args(args);
 
     for k in config.env {
         match k.action {
@@ -189,7 +234,7 @@ pub fn main() {
             .stderr(Stdio::null());
     }
 
-    let mut child = cmd.spawn().expect("SS: Failed to execute command");
+    let mut child = cmd.spawn().expect(format!("SS: Failed to execute command {}", path).as_str());
 
     if config.win || config.hidden {
         process::exit(0);

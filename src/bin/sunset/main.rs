@@ -1,4 +1,4 @@
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{Parser, Subcommand, ArgAction};
 use std::env;
 use std::fs;
 use std::path;
@@ -11,61 +11,62 @@ use winreg::RegKey;
 use sunset::shim;
 use sunset::shimmer;
 
-/// Search for a pattern in a file and display the lines that contain it.
+/// Create shims to executables with default arguments and environment in Windows.
 #[derive(Parser)]
 #[clap(trailing_var_arg = true)]
+#[command(version, about, long_about = None)]
 struct Cli {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     Init {
-        #[clap(long, env = "SUNSET_SHIMS_PATH")]
+        #[arg(long, env = "SUNSET_SHIMS_PATH")]
         shims_path: Option<String>,
     },
 
     /// Adds files to myapp
     Shim {
-        #[clap(long)]
+        #[arg(long)]
         shim_name: Option<String>,
 
-        #[clap(long, action=ArgAction::SetTrue)]
+        #[arg(long, action=ArgAction::SetTrue)]
         win: Option<bool>,
 
-        #[clap(long, action=ArgAction::SetTrue)]
+        #[arg(long, action=ArgAction::SetTrue)]
         hidden: Option<bool>,
 
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         path: String,
 
-        #[clap(value_parser, allow_hyphen_values = true)]
+        #[arg(value_parser, allow_hyphen_values = true)]
         args: Vec<String>,
     },
 
     Path {
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         name: Option<String>,
     },
 
     Edit {
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         name: String,
     },
 
     Show {
-        #[clap(value_parser, name = "SHIM NAME")]
+        #[arg(value_parser, name = "SHIM NAME")]
         name: String,
     },
 
     Rm {
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         name: Option<String>,
     },
 
     Upgrade {
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         name: Option<String>,
     },
 
