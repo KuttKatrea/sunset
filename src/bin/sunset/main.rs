@@ -38,6 +38,9 @@ enum Commands {
         #[arg(long, action=ArgAction::SetTrue)]
         hidden: Option<bool>,
 
+        #[arg(long, action=ArgAction::SetFalse)]
+        no_wait: Option<bool>,
+
         #[arg(value_parser)]
         path: String,
 
@@ -84,6 +87,7 @@ fn main() {
             shim_name,
             win,
             hidden,
+            no_wait,
             path: target_path,
             args,
         } => shimmer::shim(target_path, args, shim_name, win, hidden),

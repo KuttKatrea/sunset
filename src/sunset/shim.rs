@@ -31,6 +31,7 @@ pub struct ShimConfig {
     pub env: Vec<ShimConfigEnvActionItem>,
     pub win: bool,
     pub hidden: bool,
+    pub wait: bool,
     pub env_expand_path: bool,
     pub env_expand_args: bool,
 }
@@ -123,6 +124,12 @@ pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
         .as_bool()
         .unwrap();
 
+    let wait = value
+        .get("wait")
+        .unwrap_or(&Boolean(true))
+        .as_bool()
+        .unwrap();
+
     let env_expand_path = value
         .get("env_expand_path")
         .unwrap_or(&Boolean(false))
@@ -141,6 +148,7 @@ pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
         env,
         win,
         hidden,
+        wait,
         env_expand_path,
         env_expand_args,
     };
@@ -236,7 +244,7 @@ pub fn main() {
 
     let mut child = cmd.spawn().expect(format!("SS: Failed to execute command {}", path).as_str());
 
-    if config.win || config.hidden {
+    if !config.wait {
         process::exit(0);
     }
 

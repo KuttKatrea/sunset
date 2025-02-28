@@ -14,6 +14,7 @@ pub fn shim(
     shim_name: &Option<String>,
     win: &Option<bool>,
     hidden: &Option<bool>,
+    no_wait: &Option<bool>,
 ) {
     let target_pathbuf = PathBuf::from(target_path);
 
@@ -82,6 +83,10 @@ pub fn shim(
 
     if hidden.unwrap() {
         shimfile_content.insert(String::from("hidden"), toml::Value::from(hidden.unwrap()));
+    }
+
+    if no_wait.unwrap() {
+        shimfile_content.insert(String::from("no_wait"), toml::Value::from(no_wait.unwrap()));
     }
 
     let toml_content = match toml::to_string(&shimfile_content) {
