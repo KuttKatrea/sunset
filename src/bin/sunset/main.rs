@@ -1,12 +1,12 @@
-use clap::{Parser, Subcommand, ArgAction};
+use clap::{ArgAction, Parser, Subcommand};
 use std::env;
 use std::fs;
 use std::path;
 use std::process;
 
+use winreg::RegKey;
 use winreg::enums::HKEY_CURRENT_USER;
 use winreg::enums::KEY_ALL_ACCESS;
-use winreg::RegKey;
 
 use sunset::shim;
 use sunset::shimmer;
@@ -14,7 +14,7 @@ use sunset::shimmer;
 /// Create shims to executables with default arguments and environment in Windows.
 #[derive(Parser)]
 #[clap(trailing_var_arg = true)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about=None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -22,59 +22,75 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initializes sunset by creating the base path for shims and adding it to the PATH environment variable.
     Init {
-        #[arg(long, env = "SUNSET_SHIMS_PATH")]
+        /// Path to create the shims in
+        #[arg(long, env = "SUNSET_SHIMS_PATH", name = "SHIMS PATH")]
         shims_path: Option<String>,
     },
 
-    /// Adds files to myapp
+    /// Create shim for executable
     Shim {
-        #[arg(long)]
+        /// Name of the shim descriptor to be created
+        #[arg(long, name = "SHIM NAME")]
         shim_name: Option<String>,
 
+        /// Specifies if the shim target is a GUI windows application.
+        /// For a GUI application, sunset uses the shimw application that doesn't require a terminal.
         #[arg(long, action=ArgAction::SetTrue)]
         win: Option<bool>,
 
+        /// Specifies if the shim target should not create a terminal window.
+        /// Use with --win if the application launches a terminal window along its GUI.
         #[arg(long, action=ArgAction::SetTrue)]
         hidden: Option<bool>,
 
+        /// Does not wait for the termination of the target application.
         #[arg(long, action=ArgAction::SetFalse)]
         no_wait: Option<bool>,
 
+        /// Path of the target application
         #[arg(value_parser)]
         path: String,
 
+        /// Additional arguments for the target application
         #[arg(value_parser, allow_hyphen_values = true)]
         args: Vec<String>,
     },
 
+    /// Display the path to the shim descriptor
     Path {
-        #[arg(value_parser)]
-        name: Option<String>,
-    },
-
-    Edit {
-        #[arg(value_parser)]
-        name: String,
-    },
-
-    Show {
+        /// Name of the shim to display the path for (it may not exists).
+        // If not specified, display the path to the shims folder
         #[arg(value_parser, name = "SHIM NAME")]
-        name: String,
+        shim_name: Option<String>,
     },
 
-    Rm {
-        #[arg(value_parser)]
-        name: Option<String>,
+    /// Display the content of the shim descriptor file
+    Info {
+        /// Name of the shim descriptor
+        #[arg(value_parser, name = "SHIM NAME")]
+        shim_name: String,
     },
 
+    /// Remove a shim
+    Remove {
+        /// Name of the shim descriptor to be removed
+        #[arg(value_parser, name = "SHIM NAME")]
+        shim_name: Option<String>,
+    },
+
+    /// Upgrade the shim executable to be used for a shim
     Upgrade {
-        #[arg(value_parser)]
-        name: Option<String>,
+        /// Name of the shim descriptor to be upgraded
+        #[arg(value_parser, name = "SHIM NAME")]
+        shim_name: Option<String>,
     },
 
+    /// List the available shims
     List {},
 
+    /// Upgrade all the shim executables for all available shims
     UpgradeAll {},
 }
 
@@ -90,12 +106,11 @@ fn main() {
             no_wait,
             path: target_path,
             args,
-        } => shimmer::shim(target_path, args, shim_name, win, hidden),
-        Commands::Path { name } => shimmer::shim_path(name),
-        Commands::Edit { name } => shimmer::shim_edit(name),
-        Commands::Show { name } => shimmer::shim_show(name),
-        Commands::Rm { name } => shimmer::shim_remove(name),
-        Commands::Upgrade { name } => shim_upgrade(name),
+        } => shimmer::shim(target_path, args, shim_name, win, hidden, no_wait),
+        Commands::Path { shim_name } => shimmer::shim_path(shim_name),
+        Commands::Info { shim_name } => shimmer::shim_info(shim_name),
+        Commands::Remove { shim_name } => shimmer::shim_remove(shim_name),
+        Commands::Upgrade { shim_name } => shim_upgrade(shim_name),
         Commands::List {} => shim_list(),
         Commands::UpgradeAll {} => shim_upgrade_all(),
     };
@@ -171,7 +186,7 @@ fn shim_init(shims_path: &Option<String>) {
         println!("{} already on PATH", selected_shims_path_str);
     }
 
-    println!("Restart processes");
+    println!("Restart processes or machine to apply environment variables changes.");
 }
 
 fn shim_upgrade(shim_name: &Option<String>) {
@@ -220,7 +235,7 @@ fn shim_upgrade_all() {
         let shim_path = shimmer::get_shimfile(&shim_dir, &it);
         let shimmed_exe_path = shimmer::get_shimmed_exe(&shim_dir, &it);
 
-        println!("Upgrading shim for {:?}", shim_path);
+        println!("Upgrading shim {:?}", shim_path);
 
         let config = shim::read_config(shim_path.as_path()).expect("Error reading file");
         let shim_exe = shimmer::get_shim_exe(&sunset_dir, &config.win);

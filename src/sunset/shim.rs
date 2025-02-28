@@ -1,12 +1,12 @@
+use once_cell::sync::Lazy;
+use regex::{Captures, Regex};
 use std::env;
 use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process;
 use std::process::{Command, Stdio};
-use toml::value::Table;
 use toml::Value::Boolean;
-use regex::{Captures, Regex};
-use once_cell::sync::Lazy;
+use toml::value::Table;
 
 #[derive(Debug)]
 enum ShimConfigEnvAction {
@@ -156,17 +156,17 @@ pub fn read_config(path: &Path) -> std::io::Result<ShimConfig> {
     Ok(ret_value)
 }
 
-static ENV_VAR: Lazy<Regex> = Lazy::new(|| {
-    Regex::new("%([[:word:]]*)%").expect("Invalid Regex")
-});
+static ENV_VAR: Lazy<Regex> = Lazy::new(|| Regex::new("%([[:word:]]*)%").expect("Invalid Regex"));
 
 pub fn env_expand(input: &String) -> String {
     // Shamelessly ripped of from:
     // https://users.rust-lang.org/t/expand-win-env-var-in-string/50320/3
-    ENV_VAR.replace_all(input.as_str(), |c:&Captures| match &c[1] {
-        "" => String::from("%"),
-        varname => env::var(varname).unwrap_or("".to_string())
-    }).into()
+    ENV_VAR
+        .replace_all(input.as_str(), |c: &Captures| match &c[1] {
+            "" => String::from("%"),
+            varname => env::var(varname).unwrap_or("".to_string()),
+        })
+        .into()
 }
 
 pub fn main() {
@@ -181,7 +181,8 @@ pub fn main() {
 
     let shim_path = shim_path_buf.as_path();
 
-    let config = read_config(shim_path).expect(format!("Error reading file: {}", shim_path.display()).as_str());
+    let config = read_config(shim_path)
+        .expect(format!("Error reading file: {}", shim_path.display()).as_str());
 
     // dbg!(&config);
 
@@ -242,7 +243,9 @@ pub fn main() {
             .stderr(Stdio::null());
     }
 
-    let mut child = cmd.spawn().expect(format!("SS: Failed to execute command {}", path).as_str());
+    let mut child = cmd
+        .spawn()
+        .expect(format!("sunset: Failed to execute command {}", path).as_str());
 
     if !config.wait {
         process::exit(0);

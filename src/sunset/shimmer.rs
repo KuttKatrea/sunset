@@ -124,14 +124,7 @@ pub fn shim_path(name: &Option<String>) {
     println!("{}", shimfile_path.to_str().unwrap());
 }
 
-pub fn shim_edit(name: &String) {
-    // Print path of shimfile if exists
-    let shimfile_path = get_shimfile(&get_shims_dir(), name);
-
-    open::that(&shimfile_path).expect("Error opening shimfile");
-}
-
-pub fn shim_show(name: &String) {
+pub fn shim_info(name: &String) {
     // Print path of shimfile if exists
     let shimfile_path = get_shimfile(&get_shims_dir(), name);
 
