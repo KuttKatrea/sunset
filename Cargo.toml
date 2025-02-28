@@ -1,6 +1,6 @@
 [package]
 name = "sunset"
-version = "0.3.0"
+version = "2025.2.1"
 edition = "2024"
 default-run = "sunset"
 
